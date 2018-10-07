@@ -62,7 +62,7 @@ int flb_parser_json_do(struct flb_parser *parser,
 
     /* Make sure object is a map */
     msgpack_unpacked_init(&result);
-    if (msgpack_unpack_next(&result, mp_buf, mp_size, &off)) {
+    if (msgpack_unpack_next(&result, mp_buf, mp_size, &off) == MSGPACK_UNPACK_SUCCESS) {
         map = result.data;
         if (map.type != MSGPACK_OBJECT_MAP) {
             flb_free(mp_buf);
@@ -92,11 +92,10 @@ int flb_parser_json_do(struct flb_parser *parser,
             off = 0;
             msgpack_unpacked_destroy(&result);
             msgpack_unpacked_init(&result);
-            if (msgpack_unpack_next(&result, tmp_out_buf, tmp_out_size, &off) < 0)
-{
-            msgpack_unpacked_destroy(&result);
-return -1;
-}
+            if (msgpack_unpack_next(&result, tmp_out_buf, tmp_out_size, &off) < MSGPACK_UNPACK_CONTINUE) {
+                msgpack_unpacked_destroy(&result);
+                return -1;
+            }
             map = result.data;
         }
     }

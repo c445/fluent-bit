@@ -167,10 +167,10 @@ static void try_to_convert_data_type(struct lua_filter *lf,
     struct mk_list  *head     = NULL;
     struct l2c_type *l2c      = NULL;
 
-    if ((lua_type(l, -2) == LUA_TSTRING) 
+    if ((lua_type(l, -2) == LUA_TSTRING)
         && lua_type(l, -1) == LUA_TNUMBER){
         tmp = lua_tolstring(l, -2, &len);
-        
+
         mk_list_foreach_safe(head, tmp_list, &lf->l2c_types) {
             l2c = mk_list_entry(head, struct l2c_type, _head);
             if (!strncmp(l2c->key, tmp, len)) {
@@ -355,7 +355,7 @@ static int cb_lua_filter(void *data, size_t bytes,
     msgpack_packer_init(&tmp_pck, &tmp_sbuf, msgpack_sbuffer_write);
 
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         msgpack_packer data_pck;
         msgpack_sbuffer data_sbuf;
 

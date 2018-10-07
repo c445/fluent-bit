@@ -155,7 +155,7 @@ static char *elasticsearch_format(void *data, size_t bytes,
 
     /* Perform some format validation */
     ret = msgpack_unpack_next(&result, data, bytes, &off);
-    if (!ret) {
+    if (ret != MSGPACK_UNPACK_SUCCESS) {
         msgpack_unpacked_destroy(&result);
         return NULL;
     }
@@ -199,7 +199,7 @@ static char *elasticsearch_format(void *data, size_t bytes,
                              ctx->index, ctx->type);
     }
 
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         if (result.data.type != MSGPACK_OBJECT_ARRAY) {
             continue;
         }
@@ -389,7 +389,7 @@ static int elasticsearch_error_check(struct flb_http_client *c)
     /* Lookup error field */
     msgpack_unpacked_init(&result);
     ret = msgpack_unpack_next(&result, out_buf, out_size, &off);
-    if (!ret) {
+    if (ret == MSGPACK_UNPACK_SUCCESS) {
         return FLB_TRUE;
     }
 

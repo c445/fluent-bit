@@ -61,7 +61,7 @@ static char *msgpack_to_json(struct flb_out_http *ctx, char *data, uint64_t byte
 
     /* Iterate the original buffer and perform adjustments */
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         array_size++;
     }
     msgpack_unpacked_destroy(&result);
@@ -73,7 +73,7 @@ static char *msgpack_to_json(struct flb_out_http *ctx, char *data, uint64_t byte
     msgpack_pack_array(&tmp_pck, array_size);
 
     off = 0;
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         /* Each array must have two entries: time and record */
         root = result.data;
         if (root.via.array.size != 2) {

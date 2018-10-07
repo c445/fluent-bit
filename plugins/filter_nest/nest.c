@@ -171,7 +171,7 @@ static void helper_pack_string(msgpack_packer * packer, const char *str,
     }
 }
 
-static void helper_pack_string_remove_prefix(msgpack_packer * packer, 
+static void helper_pack_string_remove_prefix(msgpack_packer * packer,
         struct filter_nest_ctx *ctx,
         const char *str,
         int len)
@@ -190,7 +190,7 @@ static void helper_pack_string_remove_prefix(msgpack_packer * packer,
     }
 }
 
-static void helper_pack_string_add_prefix(msgpack_packer * packer, 
+static void helper_pack_string_add_prefix(msgpack_packer * packer,
         struct filter_nest_ctx *ctx,
         const char *str,
         int len)
@@ -294,13 +294,13 @@ static inline bool is_kv_to_nest(msgpack_object_kv * kv,
         wildcard = mk_list_entry(head, struct filter_nest_wildcard, _head);
 
         if (wildcard->key_is_dynamic) {
-            // This will positively match "ABC123" with prefix "ABC*" 
+            // This will positively match "ABC123" with prefix "ABC*"
             if (strncmp(key, wildcard->key, wildcard->key_len) == 0) {
                 return true;
             }
         }
         else {
-            // This will positively match "ABC" with prefix "ABC" 
+            // This will positively match "ABC" with prefix "ABC"
             if ((wildcard->key_len == klen) &&
                     (strncmp(key, wildcard->key, klen) == 0)
               ) {
@@ -559,7 +559,7 @@ static int cb_nest_filter(void *data, size_t bytes,
     // [1123123, {"Mem.total"=>4050908, "Mem.used"=>476576, "Mem.free"=>3574332 } ]
 
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         if (result.data.type == MSGPACK_OBJECT_ARRAY) {
             if (ctx->operation == NEST) {
                 modified_records +=

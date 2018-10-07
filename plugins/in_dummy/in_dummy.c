@@ -45,7 +45,7 @@ static int in_dummy_collect(struct flb_input_instance *i_ins,
     msgpack_unpacked_init(&result);
     flb_input_buf_write_start(i_ins);
 
-    while (msgpack_unpack_next(&result, pack, pack_size, &off)) {
+    while (msgpack_unpack_next(&result, pack, pack_size, &off) == MSGPACK_UNPACK_SUCCESS) {
         if (result.data.type == MSGPACK_OBJECT_MAP) {
             /* { map => val, map => val, map => val } */
             msgpack_pack_array(&i_ins->mp_pck, 2);

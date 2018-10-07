@@ -118,7 +118,7 @@ static void out_lib_flush(void *data, size_t bytes,
     (void) tag_len;
 
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         switch(ctx->format) {
         case FLB_OUT_LIB_FMT_MSGPACK:
             alloc_size = (off - last_off);

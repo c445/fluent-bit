@@ -491,7 +491,7 @@ static int cb_kube_filter(void *data, size_t bytes,
 
     /* Iterate each item array and append meta */
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         root = result.data;
         if (root.type != MSGPACK_OBJECT_ARRAY) {
             continue;

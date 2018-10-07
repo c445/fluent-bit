@@ -323,7 +323,7 @@ void flb_pack_print(char *data, size_t bytes)
     size_t off = 0, cnt = 0;
 
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off) >= 0) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         printf("[%zd] ", cnt++);
         msgpack_object_print(stdout, result.data);
         printf("\n");
@@ -529,7 +529,7 @@ flb_sds_t flb_msgpack_raw_to_json_sds(void *in_buf, size_t in_size)
     }
 
     msgpack_unpacked_init(&result);
-    if (msgpack_unpack_next(&result, in_buf, in_size, &off) < 0)
+    if (msgpack_unpack_next(&result, in_buf, in_size, &off) < MSGPACK_UNPACK_CONTINUE)
         return NULL;
     root = &result.data;
 
@@ -625,7 +625,7 @@ int flb_msgpack_raw_to_json_str(char *buf, size_t buf_size,
 
     msgpack_unpacked_init(&result);
     ret = msgpack_unpack_next(&result, buf, buf_size, &off);
-    if (ret == -1) {
+    if (ret == MSGPACK_UNPACK_PARSE_ERROR) {
         return -1;
     }
 
@@ -1337,7 +1337,7 @@ flb_sds_t flb_msgpack_raw_to_gelf(char *buf, size_t buf_size,
 
     msgpack_unpacked_init(&result);
     ret = msgpack_unpack_next(&result, buf, buf_size, &off);
-    if (ret == -1) {
+    if (ret == MSGPACK_UNPACK_PARSE_ERROR) {
         return NULL;
     }
 

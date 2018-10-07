@@ -76,7 +76,7 @@ static inline int process_pack(struct flb_in_serial_config *ctx,
 
     /* First pack the results, iterate concatenated messages */
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, pack, size, &off)) {
+    while (msgpack_unpack_next(&result, pack, size, &off) == MSGPACK_UNPACK_SUCCESS) {
         entry = result.data;
 
         msgpack_pack_array(&ctx->i_ins->mp_pck, 2);

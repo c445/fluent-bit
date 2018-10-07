@@ -54,7 +54,7 @@ static inline int pack_json(struct flb_in_stdin_config *ctx,
 
     flb_input_buf_write_start(ctx->i_in);
 
-    while (msgpack_unpack_next(&result, data, data_size, &off)) {
+    while (msgpack_unpack_next(&result, data, data_size, &off) == MSGPACK_UNPACK_SUCCESS) {
         if (result.data.type == MSGPACK_OBJECT_MAP) {
             /* { map => val, map => val, map => val } */
             msgpack_pack_array(&ctx->i_in->mp_pck, 2);
