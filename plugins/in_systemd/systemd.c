@@ -145,7 +145,11 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
         }
 
         /* Set time */
-        sd_journal_get_realtime_usec(ctx->j, &usec);
+        if (sd_journal_get_realtime_usec(ctx->j, &usec) != 0) {
+            /* Journal file is deleted already. */
+            flb_error("[in_systemd] error reading from systemd journal. sd_journal_get_realtime_usec() return value is '%s'", ret);
+            return FLB_SYSTEMD_ERROR;
+        }
         sec = usec / 1000000;
         nsec = (usec % 1000000) * 1000;
         flb_time_set(&tm, sec, nsec);
@@ -187,7 +191,7 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
 
         /* Pack every field in the entry */
         entries = 0;
-        while (sd_journal_enumerate_data(ctx->j, &data, &length) &&
+        while (sd_journal_enumerate_data(ctx->j, &data, &length) > 0 &&
                entries < ctx->max_fields) {
             key = (char *) data;
             sep = strchr(key, '=');
@@ -325,6 +329,10 @@ static int in_systemd_collect_archive(struct flb_input_instance *i_ins,
         flb_input_collector_start(ctx->coll_fd_pending, i_ins);
 
         return 0;
+    } else if (ret == FLB_SYSTEMD_ERROR) {
+        flb_error("[in_systemd] in_systemd_collect() returned an error");
+        flb_systemd_config_destroy(ctx);
+        return -1;
     }
 
     /* If FLB_SYSTEMD_NONE or FLB_SYSTEMD_MORE, keep trying */
