@@ -90,7 +90,8 @@ static char *influxdb_format(char *tag, int tag_len,
 
     /* Perform some format validation */
     ret = msgpack_unpack_next(&result, data, bytes, &off);
-    if (!ret) {
+    if (ret == MSGPACK_UNPACK_CONTINUE) {
+        /* TODO: will this ever be triggered? Maybe check if (ret != MSGPACK_UNPACK_SUCCESS)? */
         return NULL;
     }
 
@@ -127,7 +128,7 @@ static char *influxdb_format(char *tag, int tag_len,
     off = 0;
     msgpack_unpacked_destroy(&result);
     msgpack_unpacked_init(&result);
-    while (msgpack_unpack_next(&result, data, bytes, &off)) {
+    while (msgpack_unpack_next(&result, data, bytes, &off) == MSGPACK_UNPACK_SUCCESS) {
         if (result.data.type != MSGPACK_OBJECT_ARRAY) {
             continue;
         }
