@@ -114,6 +114,9 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
      */
     if (ctx->pending_records == FLB_FALSE) {
         ret = sd_journal_process(ctx->j);
+        if (ret == SD_JOURNAL_INVALIDATE) {
+            flb_debug("[in_systemd] received event on added or removed journal file");
+        }
         if (ret != SD_JOURNAL_APPEND && ret != SD_JOURNAL_NOP) {
             return FLB_SYSTEMD_NONE;
         }
@@ -146,7 +149,14 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
         }
 
         /* Set time */
-        sd_journal_get_realtime_usec(ctx->j, &usec);
+        ret = sd_journal_get_realtime_usec(ctx->j, &usec);
+        if (ret != 0) {
+            /* It seems the journal file was deleted (rotated). */
+            flb_error("[in_systemd] unable to get log message timestamp:"
+                " sd_journal_get_realtime_usec() return value is '%s'", ret);
+            ret_j = -1;
+            break;
+        }
         sec = usec / 1000000;
         nsec = (usec % 1000000) * 1000;
         flb_time_set(&tm, sec, nsec);
@@ -188,7 +198,7 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
 
         /* Pack every field in the entry */
         entries = 0;
-        while (sd_journal_enumerate_data(ctx->j, &data, &length) &&
+        while (sd_journal_enumerate_data(ctx->j, &data, &length) > 0 &&
                entries < ctx->max_fields) {
             key = (char *) data;
             sep = strchr(key, '=');
@@ -208,6 +218,9 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
             entries++;
         }
         rows++;
+        if (entries == ctx->max_fields) {
+            flb_debug("[in_systemd] max number of fields is reached: %i; all other fields are discarded", ctx->max_fields);
+        }
 
         /*
          * The fields were packed, now we need to adjust the msgpack map size
@@ -240,12 +253,10 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
             msgpack_sbuffer_init(&mp_sbuf);
             strncpy(last_tag, tag, tag_len);
             last_tag_len = tag_len;
-            ret_j = -1;
             break;
         }
 
         if (rows >= ctx->max_entries) {
-            ret_j = -1;
             break;
         }
     }
@@ -272,15 +283,28 @@ static int in_systemd_collect(struct flb_input_instance *i_ins,
     if (ret_j == 0) {
         ctx->pending_records = FLB_FALSE;
         return FLB_SYSTEMD_OK;
+    } else if (ret_j > 0) {
+        /*
+        * ret_j == 1, but the loop was broken due to some special condition like
+        * buffer size limit or it reach the max number of rows that it supposed to
+        * process on this call. Assume there are pending records.
+        */
+        ctx->pending_records = FLB_TRUE;
+        return FLB_SYSTEMD_MORE;
+    } else {
+        ctx->pending_records = FLB_FALSE;
+        tmp = flb_input_get_property("read_from_tail", ctx->i_ins);
+        if (tmp != NULL && flb_utils_bool(tmp)) {
+            sd_journal_seek_tail(ctx->j);
+        }
+        else {
+            sd_journal_seek_head(ctx->j);
+        }
+        sd_journal_get_cursor(ctx->j, &tmp);
+        flb_error("[in_systemd] sd_journal_next() returned error %i, re-opening journal."
+            "Logs between cursor %s and %s are lost.", ret_j, cursor, tmp);
+        return FLB_SYSTEMD_ERROR;
     }
-
-    /*
-     * ret_j == -1, the loop was broken due to some special condition like
-     * buffer size limit or it reach the max number of rows that it supposed to
-     * process on this call. Assume there are pending records.
-     */
-    ctx->pending_records = FLB_TRUE;
-    return FLB_SYSTEMD_MORE;
 }
 
 static int in_systemd_collect_archive(struct flb_input_instance *i_ins,
@@ -329,6 +353,12 @@ static int in_systemd_collect_archive(struct flb_input_instance *i_ins,
         return 0;
     }
 
+    if (ret == FLB_SYSTEMD_ERROR) {
+        flb_error("[in_systemd] error reading from journal file,"
+            "re-opening journal because it was probably rotated.");
+            flb_systemd_config_destroy(ctx);
+            return -1;
+    }
     /* If FLB_SYSTEMD_NONE or FLB_SYSTEMD_MORE, keep trying */
     write(ctx->ch_manager[1], &val, sizeof(uint64_t));
 
