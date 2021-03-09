@@ -63,9 +63,56 @@
 #include <fluent-bit/flb_coro.h>
 #include <fluent-bit/flb_http_client.h>
 
+/* Increase backoff time of an upstream */
+static void flb_io_backoff_upstream(struct flb_upstream *u)
+{
+    time_t now = time(NULL);
+    int max_jitter, jitter = 0;
+
+    if (u->net.max_backoff < 1 || u->next_attempt_time > now) {
+        return;
+    }
+
+    if (u->last_backoff_seconds > 0) {
+        u->last_backoff_seconds = 2 * u->last_backoff_seconds;
+    } else {
+        srand(now); // Question to reviewer: should the RNG be (re)initialized?
+        u->last_backoff_seconds = u->net.initial_backoff;
+    }
+    if (u->last_backoff_seconds > u->net.max_backoff) {
+        u->last_backoff_seconds = u->net.max_backoff;
+    }
+
+    if (u->last_backoff_seconds > 2) {
+        /* Add plus/minus 10% jitter */
+        max_jitter = u->last_backoff_seconds % 10 + 1;
+        /* Random int from -max_jitter to +max_jitter */
+        jitter = rand() % (2*max_jitter) - max_jitter;
+    }
+
+    u->next_attempt_time = now + u->last_backoff_seconds + jitter;
+    flb_debug("[io] backoff connecting to %s:%i for %i seconds with jitter %i seconds",
+        u->tcp_host, u->tcp_port, u->last_backoff_seconds, jitter);
+}
+
+/* Returns true if upstream should be skipped. */
+static int flb_io_in_backoff(struct flb_upstream *u)
+{
+    if (u->next_attempt_time > time(NULL)) {
+        flb_debug("[io] skipping connection to %s:%i because of backoff for another %i seconds",
+                    u->tcp_host, u->tcp_port, u->next_attempt_time - time(NULL));
+        return FLB_TRUE;
+    }
+    return FLB_FALSE;
+}
+
 int flb_io_net_connect(struct flb_upstream_conn *u_conn,
                        struct flb_coro *coro)
 {
+    if (flb_io_in_backoff(u_conn->u) == FLB_TRUE) {
+        return -1;
+    }
+
     int ret;
     int async = FLB_FALSE;
     flb_sockfd_t fd = -1;
@@ -87,16 +134,18 @@ int flb_io_net_connect(struct flb_upstream_conn *u_conn,
     fd = flb_net_tcp_connect(u->tcp_host, u->tcp_port, u->net.source_address,
                              u->net.connect_timeout, async, coro, u_conn);
     if (fd == -1) {
+        flb_io_backoff_upstream(u);
         return -1;
     }
 
     if (u->proxied_host) {
         ret = flb_http_client_proxy_connect(u_conn);
         if (ret == -1) {
+            flb_io_backoff_upstream(u);
             flb_debug("[http_client] flb_http_client_proxy_connect connection #%i failed to %s:%i.",
                       u_conn->fd, u->tcp_host, u->tcp_port);
-          flb_socket_close(fd);
-          return -1;
+            flb_socket_close(fd);
+            return -1;
         }
         flb_debug("[http_client] flb_http_client_proxy_connect connection #%i connected to %s:%i.",
                   u_conn->fd, u->tcp_host, u->tcp_port);
@@ -107,6 +156,8 @@ int flb_io_net_connect(struct flb_upstream_conn *u_conn,
     if (u->flags & FLB_IO_TLS) {
         ret = flb_tls_session_create(u->tls, u_conn, coro);
         if (ret != 0) {
+            flb_io_backoff_upstream(u);
+            flb_debug("[io] flb_tls_session_create failed on connection #%i", u_conn->fd);
             flb_socket_close(fd);
             return -1;
         }
@@ -342,6 +393,10 @@ static FLB_INLINE ssize_t net_io_read_async(struct flb_coro *co,
 int flb_io_net_write(struct flb_upstream_conn *u_conn, const void *data,
                      size_t len, size_t *out_len)
 {
+    if (flb_io_in_backoff(u_conn->u) == FLB_TRUE) {
+        return -1;
+    }
+
     int ret = -1;
     struct flb_upstream *u = u_conn->u;
     struct flb_coro *coro = flb_coro_get();
@@ -366,6 +421,15 @@ int flb_io_net_write(struct flb_upstream_conn *u_conn, const void *data,
         }
     }
 #endif
+
+    if (ret == -1) {
+        flb_io_backoff_upstream(u);
+        flb_debug("[io] cannot write data to connection #%i at %s:%i",
+            u_conn->fd, u->tcp_host, u->tcp_port);
+    } else if (u->next_attempt_time < time(NULL) && u->last_backoff_seconds > 0) {
+        flb_debug("[io] connection #%i was successful, reset backoff period", u_conn->fd);
+        u->last_backoff_seconds = 0;
+    }
 
     if (ret == -1 && u_conn->fd > 0) {
         flb_socket_close(u_conn->fd);

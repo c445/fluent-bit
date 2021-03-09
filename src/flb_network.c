@@ -58,6 +58,8 @@ void flb_net_setup_init(struct flb_net_setup *net)
     net->keepalive_max_recycle = 0;
     net->connect_timeout = 10;
     net->source_address = NULL;
+    net->initial_backoff = 0;
+    net->max_backoff = 0;
 }
 
 int flb_net_host_set(const char *plugin_name, struct flb_net_host *host, const char *address)

@@ -83,6 +83,10 @@ struct flb_upstream {
 #endif
 
     struct mk_list _head;
+
+    /* Backoff state. */
+    time_t next_attempt_time;
+    int last_backoff_seconds;
 };
 
 void flb_upstream_queue_init(struct flb_upstream_queue *uq);
